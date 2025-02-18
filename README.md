@@ -2,6 +2,9 @@
 
 ![image](https://github.com/user-attachments/assets/2b34cb75-d1ff-4a8e-833b-eac0b11eb692)
 
+**[TradingView Dashboard](https://tradingview-dashboard.onrender.com/)**
+
+
 
 ### 📌 Overview
 This is a **Flask-based Trading Chart Web App** that visualizes candlestick data and technical indicators like:
