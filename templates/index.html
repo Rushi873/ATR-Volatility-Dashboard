@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Chart</title>
+    <script src="https://unpkg.com/lightweight-charts@3.4.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #0d1117; color: white; overflow: hidden; }
+        #chart-container { display: flex; flex-direction: column; align-items: center; width: 100vw; height: 100vh; position: relative; }
+        #chart, #atr-chart { width: 100%; flex-grow: 1; background: #121212; }
+        #atr-chart { height: 25vh; }
+
+        /* Fixed control panel at the top-left corner */
+        .controls {
+            position: fixed;
+            left: 10px;
+            top: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            z-index: 1001;
+            width: 160px;
+        }
+
+        .controls h2 {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 6px 10px;
+            border: none;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            border-radius: 5px;
+            font-size: 13px;
+            width: 100%;
+            margin-bottom: 6px;
+        }
+
+        button.off { background: rgba(255, 0, 0, 0.5); }
+
+        input {
+            padding: 5px;
+            width: 50px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            text-align: center;
+            border-radius: 5px;
+            margin-bottom: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="chart-container">
+        <!-- Fixed controls panel (Top-Left Corner) -->
+        <div class="controls">
+            <h2>Indicators</h2>
+            <label>ATR <input type="number" id="atrPeriod" value="14"></label>
+            <button id="toggleATR">ATR: ON</button>
+            <label>Std Dev <input type="number" id="stdPeriod" value="20"></label>
+            <button id="toggleSTD">Std Dev: ON</button>
+            <button id="toggleVOL">VOL: ON</button>
+            <button id="updateData">🔄 Update</button>  <!-- New Update Button -->
+        </div>
+
+        <div id="chart"></div>
+        <div id="atr-chart"></div>
+    </div>
+
+    <script>
+        let chart, candleSeries, atrChart, atrSeries, stdDevSeries, volumeSeries;
+        let atrVisible = true, stdDevVisible = true, volumeVisible = true;
+        let atrPeriod = 14, stdPeriod = 20;
+
+        async function fetchAndUpdateData() {
+            const [candleData, atrData, stdDevData, volumeData] = await Promise.all([
+                fetch('/data').then(res => res.json()),
+                fetch(`/atr?period=${atrPeriod}`).then(res => res.json()),
+                fetch(`/stddev?period=${stdPeriod}`).then(res => res.json()),
+                fetch('/volume').then(res => res.json())
+            ]);
+
+            candleSeries.setData(candleData.map(d => ({
+                time: d.time, open: d.open, high: d.high, low: d.low, close: d.close 
+            })));
+
+            volumeSeries.setData(volumeData.map(d => ({ time: d.time, value: d.volume })));
+
+            atrSeries.setData(atrData.map(d => ({ time: d.time, value: d.ATR })));
+
+            stdDevSeries.setData(stdDevData.map(d => ({ time: d.time, value: d.Std_Dev })));
+        }
+
+        async function updateIndicators() {
+            atrPeriod = parseInt(document.getElementById("atrPeriod").value);
+            stdPeriod = parseInt(document.getElementById("stdPeriod").value);
+
+            await fetch('/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ atr_period: atrPeriod, std_period: stdPeriod })
+            });
+
+            await fetchAndUpdateData(); // Refresh the chart with updated data
+        }
+
+        async function loadChart() {
+            chart = LightweightCharts.createChart(document.getElementById("chart"), { 
+                width: window.innerWidth, height: window.innerHeight * 0.7,
+                layout: { backgroundColor: '#121212', textColor: '#fff' },
+                grid: { vertLines: { color: '#444' }, horzLines: { color: '#444' } },
+                rightPriceScale: { borderColor: '#444' }
+            });
+
+            candleSeries = chart.addCandlestickSeries({
+                upColor: '#26a69a',
+                downColor: '#ef5350',
+                borderVisible: false,
+                wickUpColor: '#26a69a',
+                wickDownColor: '#ef5350',
+            });
+
+            stdDevSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 2 });
+
+            atrChart = LightweightCharts.createChart(document.getElementById("atr-chart"), { 
+                width: window.innerWidth, height: window.innerHeight * 0.25,
+                layout: { backgroundColor: '#121212', textColor: '#fff' },
+                grid: { vertLines: { color: '#444' }, horzLines: { color: '#444' } },
+                rightPriceScale: { borderColor: '#444' }
+            });
+
+            atrSeries = atrChart.addLineSeries({ color: 'red', lineWidth: 2 });
+
+            volumeSeries = chart.addHistogramSeries({
+                color: '#26a69a',
+                priceFormat: { type: 'volume' },
+                scaleMargins: { top: 0, bottom: 0.2 },
+                priceScaleId: 'volume'
+            });
+
+            chart.priceScale('volume').applyOptions({
+                scaleMargins: { top: 0.9, bottom: 0 }
+            });
+
+            await fetchAndUpdateData();
+
+            chart.timeScale().subscribeVisibleTimeRangeChange(timeRange => {
+                atrChart.timeScale().setVisibleRange(timeRange);
+            });
+            atrChart.timeScale().subscribeVisibleTimeRangeChange(timeRange => {
+                chart.timeScale().setVisibleRange(timeRange);
+            });
+        }
+
+        document.getElementById("toggleATR").addEventListener("click", function() {
+            atrVisible = !atrVisible;
+            atrSeries.applyOptions({ visible: atrVisible });
+            this.textContent = atrVisible ? "ATR: ON" : "ATR: OFF";
+        });
+
+        document.getElementById("toggleSTD").addEventListener("click", function() {
+            stdDevVisible = !stdDevVisible;
+            stdDevSeries.applyOptions({ visible: stdDevVisible });
+            this.textContent = stdDevVisible ? "Std Dev: ON" : "Std Dev: OFF";
+        });
+
+        document.getElementById("toggleVOL").addEventListener("click", function() {
+            volumeVisible = !volumeVisible;
+            volumeSeries.applyOptions({ visible: volumeVisible });
+            this.textContent = volumeVisible ? "VOL: ON" : "VOL: OFF";
+        });
+
+        document.getElementById("updateData").addEventListener("click", updateIndicators);
+
+        window.addEventListener('resize', () => {
+            chart.resize(window.innerWidth, window.innerHeight * 0.7);
+            atrChart.resize(window.innerWidth, window.innerHeight * 0.25);
+        });
+
+        loadChart();
+    </script>
+
+</body>
+</html>
