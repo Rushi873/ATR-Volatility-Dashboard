@@ -1,5 +1,8 @@
 ## 📊 Trading Chart Web App
 
+![image](https://github.com/user-attachments/assets/2b34cb75-d1ff-4a8e-833b-eac0b11eb692)
+
+
 ### 📌 Overview
 This is a **Flask-based Trading Chart Web App** that visualizes candlestick data and technical indicators like:
 - **Average True Range (ATR)**
